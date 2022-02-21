@@ -1,13 +1,13 @@
-import glob
-import os
 import sys
+import os
+import glob
 import unittest
 
-# Allow us to import the parent module
+#Allow us to import the parent module
 os.chdir(os.path.split(os.path.abspath(__file__))[0])
 sys.path.insert(0, os.path.abspath(os.curdir))
 sys.path.insert(0, os.path.abspath(os.pardir))
-
+# sys.path.insert(0, os.path.join(os.path.abspath(os.pardir), "src"))
 
 def buildTestSuite():
     suite = unittest.TestSuite()
@@ -16,10 +16,9 @@ def buildTestSuite():
         suite.addTest(__import__(module).buildTestSuite())
     return suite
 
-
 def main():
-    return unittest.TextTestRunner().run(buildTestSuite())
-
+    results = unittest.TextTestRunner().run(buildTestSuite())
+    return results
 
 if __name__ == "__main__":
     results = main()

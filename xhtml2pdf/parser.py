@@ -13,72 +13,29 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import print_function, unicode_literals
 
 import copy
 import logging
 import re
-import xml.dom.minidom
 from xml.dom import Node
+import xml.dom.minidom
 
+from html5lib import treebuilders  # , inputstream
 import html5lib
-from html5lib import treebuilders
-from reportlab.platypus.doctemplate import FrameBreak, NextPageTemplate
-from reportlab.platypus.flowables import KeepInFrame, PageBreak
+from reportlab.platypus.doctemplate import NextPageTemplate, FrameBreak
+from reportlab.platypus.flowables import PageBreak, KeepInFrame
+import six
 
-from xhtml2pdf.default import BOOL, BOX, COLOR, FILE, FONT, INT, MUST, POS, SIZE, STRING, TAGS
+from xhtml2pdf.default import BOX, POS, MUST, FONT
+from xhtml2pdf.default import TAGS, STRING, INT, BOOL, SIZE, COLOR, FILE
+from xhtml2pdf.tables import *  # TODO: Kill wild import!
+from xhtml2pdf.tags import *  # TODO: Kill wild import!
+from xhtml2pdf.util import getBox, getPos, pisaTempFile, transform_attrs
+from xhtml2pdf.util import getSize, getBool, toList, getColor, getAlign
+import xhtml2pdf.w3c.cssDOMElementInterface as cssDOMElementInterface
+from xhtml2pdf.xhtml2pdf_reportlab import PmlRightPageBreak, PmlLeftPageBreak
 
-# TODO: Why do we need to import these Tags here? They aren't uses in this file or any other file,
-#  but if we don't import them, Travis & AppVeyor fail. Very strange (fbernhart)
-from xhtml2pdf.tables import (TableData,
-                              pisaTagTABLE,
-                              pisaTagTD,
-                              pisaTagTR,
-                              pisaTagTH)
-
-from xhtml2pdf.tags import (pisaTagIMG,
-                            pisaTagPDFLANGUAGE,
-                            pisaTagPDFNEXTPAGE,
-                            pisaTag,
-                            pisaTagA,
-                            pisaTagBODY,
-                            pisaTagBR,
-                            pisaTagDIV,
-                            pisaTagFONT,
-                            pisaTagH1,
-                            pisaTagH2,
-                            pisaTagH3,
-                            pisaTagH4,
-                            pisaTagH5,
-                            pisaTagH6,
-                            pisaTagHR,
-                            pisaTagLI,
-                            pisaTagMETA,
-                            pisaTagOL,
-                            pisaTagP,
-                            pisaTagPDFBARCODE,
-                            pisaTagPDFFONT,
-                            pisaTagPDFFRAME,
-                            pisaTagPDFNEXTFRAME,
-                            pisaTagPDFNEXTTEMPLATE,
-                            pisaTagPDFPAGECOUNT,
-                            pisaTagPDFPAGENUMBER,
-                            pisaTagPDFSPACER,
-                            pisaTagPDFTEMPLATE,
-                            pisaTagPDFTOC,
-                            pisaTagSTYLE,
-                            pisaTagSUB,
-                            pisaTagSUP,
-                            pisaTagTITLE,
-                            pisaTagUL,
-                            # pisaTagINPUT,
-                            # pisaTagTEXTAREA,
-                            # pisaTagSELECT,
-                            # pisaTagOPTION
-                            )
-
-from xhtml2pdf.util import getAlign, getBool, getBox, getColor, getPos, getSize, pisaTempFile, toList, transform_attrs
-from xhtml2pdf.w3c import cssDOMElementInterface
-from xhtml2pdf.xhtml2pdf_reportlab import PmlLeftPageBreak, PmlRightPageBreak
 
 CSSAttrCache = {}
 
@@ -97,6 +54,7 @@ class AttrContainer(dict):
 
 
 def pisaGetAttributes(c, tag, attributes):
+    global TAGS
 
     attrs = {}
     if attributes:
@@ -112,7 +70,7 @@ def pisaGetAttributes(c, tag, attributes):
         block, adef = TAGS[tag]
         adef["id"] = STRING
 
-        for k, v in adef.items():
+        for k, v in six.iteritems(adef):
             nattrs[k] = None
             # print k, v
             # defaults, wenn vorhanden
@@ -317,11 +275,12 @@ def CSSCollect(node, c):
                 log.debug("CSS error '%s'", cssAttrName, exc_info=1)
 
         CSSAttrCache[_key] = node.cssAttrs
+
     return node.cssAttrs
 
 
 def lower(sequence):
-    if isinstance(sequence, str):
+    if isinstance(sequence, six.string_types):
         return sequence.lower()
     else:
         return sequence[0].lower()
@@ -538,6 +497,7 @@ def pisaLoop(node, context, path=None, **kw):
     if node.nodeType == Node.TEXT_NODE:
         # print indent, "#", repr(node.data) #, context.frag
         context.addFrag(node.data)
+
         # context.text.append(node.value)
 
     # ELEMENT
@@ -621,7 +581,7 @@ def pisaLoop(node, context, path=None, **kw):
                         (
                             ("keepWithNext", "-pdf-keep-with-next"),
                             ("outline", "-pdf-outline"),
-                            #("borderLeftColor", "-pdf-outline-open"),
+                            ("borderLeftColor", "-pdf-outline-open"),
                         ),
                         context.cssAttr,
                         getBool
@@ -752,20 +712,17 @@ def pisaParser(src, context, default_css="", xhtml=False, encoding=None, xml_out
     CSSAttrCache = {}
 
     if xhtml:
-        # TODO: XHTMLParser doesn't seem to exist...
+        # TODO: XHTMLParser doesn't see to exist...
         parser = html5lib.XHTMLParser(tree=treebuilders.getTreeBuilder("dom"))
     else:
         parser = html5lib.HTMLParser(tree=treebuilders.getTreeBuilder("dom"))
-    parser_kwargs = {}
-    if isinstance(src, str):
+
+    if isinstance(src, six.text_type):
         # If an encoding was provided, do not change it.
         if not encoding:
             encoding = "utf-8"
         src = src.encode(encoding)
         src = pisaTempFile(src, capacity=context.capacity)
-        # To pass the encoding used to convert the text_type src to binary_type
-        # on to html5lib's parser to ensure proper decoding
-        parser_kwargs['transport_encoding'] = encoding
 
     # # Test for the restrictions of html5lib
     # if encoding:
@@ -779,7 +736,7 @@ def pisaParser(src, context, default_css="", xhtml=False, encoding=None, xml_out
     #         if inputstream.codecName(encoding) is None:
     #             log.error("%r is not a valid encoding", encoding)
     document = parser.parse(
-        src, **parser_kwargs
+        src,
     )  # encoding=encoding)
 
     if xml_output:

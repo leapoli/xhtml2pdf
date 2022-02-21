@@ -5,8 +5,7 @@ help:
 	@echo "clean-pyc - remove Python file artifacts"
 	@echo "lint - check style with flake8"
 	@echo "test - run tests quickly with the default Python"
-	@echo "test-all - run tests on every Python version with tox"
-	@echo "test-ref - create reference directory for testrender"
+	@echo "testall - run tests on every Python version with tox"
 	@echo "docs - generate Sphinx HTML documentation, including API docs"
 	@echo "release - package and upload a release"
 	@echo "sdist - package"
@@ -32,9 +31,6 @@ test:
 test-all:
 	tox
 
-test-ref:
-	cd testrender && python testrender.py --create-reference data/reference
-	
 docs:
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html

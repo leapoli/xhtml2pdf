@@ -1,4 +1,14 @@
 # -*- coding: utf-8 -*-
+import copy
+import logging
+
+from reportlab.platypus.tables import TableStyle
+import six
+
+from xhtml2pdf.tags import pisaTag
+from xhtml2pdf.util import getSize, getBorderStyle, getAlign, set_value
+from xhtml2pdf.xhtml2pdf_reportlab import PmlTable, PmlKeepInFrame
+
 
 # Copyright 2010 Dirk Holtwick, holtwick.it
 #
@@ -13,15 +23,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import copy
-import logging
-from reportlab.platypus.tables import TableStyle
-
-from xhtml2pdf.tags import pisaTag
-from xhtml2pdf.util import getAlign, getBorderStyle, getSize, set_value
-from xhtml2pdf.xhtml2pdf_reportlab import PmlKeepInFrame, PmlTable
-
 log = logging.getLogger("xhtml2pdf")
 
 
@@ -176,11 +177,22 @@ class pisaTagTABLE(pisaTag):
         try:
             maxcols = max([len(row) for row in data] or [0])
         except ValueError:
-            log.warning(c.warning("<table> rows seem to be inconsistent"))
+            log.warn(c.warning("<table> rows seem to be inconsistent"))
             maxcols = [0]
 
         for i, row in enumerate(data):
             data[i] += [''] * (maxcols - len(row))
+
+        cols_with_no_width = [
+            tup for tup in enumerate(tdata.colw) if tup[1] is None or tup[1] == 0.0]
+
+        if cols_with_no_width:  # any col width not defined
+            log.debug(list(enumerate(tdata.colw)))
+            fair_division = str(100 / float(len(cols_with_no_width))) + '%'
+            log.debug("Fair division: {}".format(fair_division))
+            for i, _ in cols_with_no_width:
+                log.debug("Setting {} to {}".format(i, fair_division))
+                tdata.colw[i] = fair_division
 
         log.debug("Col widths: {}".format(list(tdata.colw)))
         if tdata.data:
@@ -205,7 +217,7 @@ class pisaTagTABLE(pisaTag):
             # t.hAlign = tdata.align
             c.addStory(t)
         else:
-            log.warning(c.warning("<table> is empty"))
+            log.warn(c.warning("<table> is empty"))
 
         # Cleanup and re-swap table data
         c.clearFrag()
@@ -222,9 +234,7 @@ class pisaTagTR(pisaTag):
 
         tdata.add_cell_styles(c, begin, end, "tr")
         c.frag.vAlign = self.attr.valign or c.frag.vAlign
-        if c.frag.backColor:
-            tdata.add_style(('BACKGROUND', begin, end, c.frag.backColor))
-            
+
         tdata.col = 0
         tdata.data.append([])
 
@@ -266,8 +276,8 @@ class pisaTagTD(pisaTag):
             end = (end[0], end[1] + rspan - 1)
         if begin != end:
             tdata.add_style(('SPAN', begin, end))
-            for x in range(begin[0], end[0] + 1):
-                for y in range(begin[1], end[1] + 1):
+            for x in six.moves.range(begin[0], end[0] + 1):
+                for y in six.moves.range(begin[1], end[1] + 1):
                     if x != begin[0] or y != begin[1]:
                         tdata.add_empty(x, y)
 
@@ -295,8 +305,7 @@ class pisaTagTD(pisaTag):
                 if len(self.node.childNodes) == 0:
                     width = c.frag.paddingLeft + c.frag.paddingRight
                     log.debug("Col {} has width {}".format(col, width))
-                    if width:
-                        tdata.colw[col] = _width(width)
+                    tdata.colw[col] = _width(width)
                 else:
                     # Child nodes are present, we cannot do anything about the
                     # width except set it externally.

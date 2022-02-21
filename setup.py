@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import os
 
 # Copyright 2010 Dirk Holtwick, holtwick.it
 #
@@ -15,13 +16,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    from ez_setup import use_setuptools
 
-import xhtml2pdf
-from setuptools import setup, find_packages
+    use_setuptools()
 
 README = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
+import xhtml2pdf
 
 setup(
     name="xhtml2pdf",
@@ -29,13 +33,12 @@ setup(
     description="PDF generator using HTML and CSS",
     license="Apache License 2.0",
     author="Dirk Holtwick",
-    maintainer="Luis Zarate",
-    maintainer_email="luisza14@gmail.com",
+    maintainer="Sam Spencer",
+    maintainer_email="use-github@doit.com",
     url="http://github.com/xhtml2pdf/xhtml2pdf",
     keywords="PDF, HTML, XHTML, XML, CSS",
-    install_requires=["html5lib>=1.0.1", "PyPDF3>=1.0.5", "Pillow>=8.1.1",
-                      "reportlab>=3.5.53", "svglib>=1.2.1",
-                      "python-bidi>=0.4.2", "arabic-reshaper>=2.1.0"],
+    install_requires=["html5lib==1.0b10", "httplib2", "pyPdf2", "Pillow", "reportlab>=3.0", "six"],
+    setup_requires=["nose>=1.0"],
     include_package_data=True,
     packages=find_packages(exclude=["tests", "tests.*"]),
     #    test_suite = "tests", They're not even working yet
@@ -55,10 +58,13 @@ setup(
         'Intended Audience :: System Administrators',
         'Natural Language :: English',
         'Operating System :: OS Independent',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
         'Topic :: Documentation',
         'Topic :: Multimedia',
         'Topic :: Office/Business',

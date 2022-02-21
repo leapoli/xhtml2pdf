@@ -261,7 +261,7 @@ vendor-specific ``-pdf-keep-with-next`` property.
 Here's an example where paragraphs and tables are kept together until a 'separator paragraph'
 appears in the HTML content flow.
 
-.. code::
+.. code:: html
 
     <style>
         table { -pdf-keep-with-next: true; }

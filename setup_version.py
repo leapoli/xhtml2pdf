@@ -18,15 +18,10 @@
 Updates the version infos
 """
 
-import re
 import time
+import re
+import cgi
 
-import six
-
-if not six.PY2:
-    from html import escape as html_escape
-else:
-    from cgi import escape as html_escape
 
 VERSION = open("VERSION.txt", "r").read().strip()
 BUILD = time.strftime("%Y-%m-%d")
@@ -38,7 +33,7 @@ FILES = [
     "doc/pisa-en.html",
 ]
 try:
-    HELP = html_escape(open("HELP.txt", "r").read(), 1)
+    HELP = cgi.escape(open("HELP.txt", "r").read(), 1)
 except:
     HELP = ""
 HELP = "<!--HELP--><pre>" + HELP + "</pre><!--HELP-->"
@@ -49,7 +44,7 @@ rxversionhtml = re.compile("\<\!--VERSION--\>.*?\<\!--VERSION--\>", re.MULTILINE
 rxhelphtml = re.compile("\<\!--HELP--\>.*?\<\!--HELP--\>", re.MULTILINE | re.IGNORECASE | re.DOTALL)
 
 for fname in FILES:
-    print ("Update", fname, "...")
+    print "Update", fname, "..."
     data = open(fname, "rb").read()
     data = rxversion.sub("VERSION{" + VERSION + "}VERSION", data)
     data = rxversionhtml.sub("<!--VERSION-->" + VERSION + "<!--VERSION-->", data)

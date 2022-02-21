@@ -8,12 +8,19 @@ This is a typical Python library and is installed using pip
 
     pip install xhtml2pdf
 
+To obtain the latest experimental version that has **Python 3 support**, please
+use a prerelease
+
+.. code:: bash
+
+    pip install --pre xhtml2pdf
+
 Requirements
 --------------
 
-Python 3.6+
+Python 2.7+. Only Python 3.4+ is tested and guaranteed to work.
 
-All additional requirements are listed in ``setup.py`` file and are
+All additional requirements are listed in ``requirements.txt`` file and are
 installed automatically using the ``pip install xhtml2pdf`` method.
 
 
@@ -28,7 +35,7 @@ Development environment
 
     For more information about ``pip`` refer to http://www.pip-installer.org/.
 
-#. We recommend using ``virtualenv`` for development. It is great to have a separate environment for
+#. I will recommend using ``virtualenv`` for development. This is great to have separate environment for
    each project, keeping the dependencies for multiple projects separated
 
     .. code:: bash
@@ -38,7 +45,7 @@ Development environment
 
     For more information about ``virtualenv`` refer to http://www.virtualenv.org/
 
-#. Create a virtualenv for the project. This can be inside the project directory, but cannot be under
+#. Create virtualenv for the project. This can be inside the project directory, but cannot be under
    version control
 
     .. code:: bash
@@ -57,7 +64,7 @@ Development environment
 
         deactivate
 
-#. Next step will be to install/upgrade dependencies from the ``requirements.txt`` file
+#. Next step will be to install/upgrade dependencies from ``requirements.txt`` file
 
     .. code:: bash
 
@@ -67,11 +74,11 @@ Development environment
 
     .. code:: bash
 
-        python -m unittest discover tests
+        nosetests --with-coverage
 
     You should have a log with success status::
 
-        Ran 108 tests in 1.372s
+        Ran 36 tests in 0.322s
 
         OK
 

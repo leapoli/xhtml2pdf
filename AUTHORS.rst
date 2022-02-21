@@ -12,7 +12,6 @@ Main developers
 * Dirk Holtwick (Main developer, no longer active)
 * Christopher Glass (no longer active)
 * Benjamin Bach (maintainer since '15)
-* Luis Zárate Montero (maintainer since 2018)
 
 Contributors
 ============

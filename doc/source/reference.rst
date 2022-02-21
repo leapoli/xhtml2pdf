@@ -17,21 +17,21 @@ Valid size syntax and values:
 ::
 
     Syntax: @page { size: <type> <orientation>; }
-
+    
     Where <type> is one of:
     a0 .. a6
     b0 .. b6
     elevenseventeen
     legal
     letter
-
+    
     And <orientation> is one of:
     landscape
     portrait
-
+    
     Defaults to:
     size: a4 portrait;
-
+    
 
 Supported @frame properties:
 -----------------------------
@@ -133,11 +133,11 @@ Link callback
 -------------
 
 Images, backgrounds and stylesheets are loaded form an HTML document.
-Normally ``xhtml2pdf`` expects these files to be found on the local drive.
+Normaly ``xhtml2pdf`` expects these files to be found on the local drive.
 They may also be referenced relative to the original document. But the
 programmer might want to load form different kind of sources like the
 Internet via HTTP requests or from a database or anything else.
-Therefore you may define a ``link_callback`` that handles these requests.
+Therefore you may define a ``link_callback`` that handles these reuests.
 
 XXX
 
@@ -167,148 +167,55 @@ knows by default (the names are not case sensitive):
 -  **ZapfDingbats**
 -  **Symbol**
 
-
-Asian Fonts Support
--------------------
-
-Now some Asian fonts are available by default for PDF. The names are not case sensitive.
-
-Simplified Chinese:
-
--  **STSong-Light**
-
-Traditional Chinese:
-
--  **MSung-Light**
-
-Japanese:
-
--  **HeiseiMin-W3**
--  **HeiseiKakuGo-W5**
-
-Korean:
-
--  **HYSMyeongJo-Medium**
--  **HYGothic-Medium**
-
-
-Just use them in the ``font-family`` property in your CSS definition.
-
-::
-
-    <style>
-    p { font-family: STSong-Light }
-    </style>
-
-If you need another font, you may have a look at the "Using Custom Fonts" section.
-
-
-Arabic / Hebrew / Persian etc. Fonts Support
---------------------------------------------
-
-If you are using a language with right-to-left writing you need to specify the language name in the ``<pdf:language name=""/>`` custom tag. This is necessary to ensure the correct direction (right to left).
-
-The following attributes for right-to-left languages are supported and tested:
-
-- ``name="arabic"``
-- ``name="hebrew"``
-- ``name="persian"``
-- ``name="urdu"``
-- ``name="pashto"``
-- ``name="sindhi"``
-
-Usage example:
-
-::
-
-    <pdf:language name="arabic"/>
-
-    <p>Some Arabic text here</p>
-    <p>Some English text here</p>
-
-The Arabic letters will render from right to left, while all other Latin letters will keep their left-to-right direction.
-
-.. warning::
-    Right now it seems like right-to-left support isn't working while using a default font-family like ``p { font-family: Times-Roman }``. We're working on fixing this. However, it works by using the ``@font-face`` tag in the CSS definition and defining a custom font. Therefore you need the specified font file. "MarkaziText" for example seems to work. It can be downloaded for free here: https://fonts.google.com/specimen/Markazi+Text Other fonts might work as well but haven't been tested.
-
-    ::
-
-        <style>
-            @font-face {font-family: MyRightToLeftFont; src: url('path\to\the\font\file\MarkaziText-Regular.ttf')}
-
-            p { font-family: MyRightToLeftFont }
-        </style>
-
-Using Custom Fonts
-------------------
-
-You may also embed a new font by using the ``@font-face``
+But you may also embed new font faces by using the ``@font-face``
 keyword in CSS like this:
 
 ::
 
     @font-face {
       font-family: Example, "Example Font";
-      src: url('example.ttf');
+      src: url(example.ttf);
     }
 
 The ``font-family`` property defines the names under which the embedded
 font will be known. ``src`` defines the place of the fonts source file.
 This can be a TrueType font or a Postscript font. The file name of the
 first has to end with ``.ttf`` the latter with one of ``.pfb`` or
-``.afm``. For Postscript fonts pass just one filename like
+``.afm``. For Postscript font pass just one filename like
 ``<name>``\ ``.afm`` or ``<name>``\ ``.pfb``, the missing one will be
 calculated automatically.
 
-To define other shapes you can do the following:
+To define other shapes you may do like this:
 
 ::
 
     /* Normal */
     @font-face {
        font-family: DejaMono;
-       src: url('font/DejaVuSansMono.ttf');
+       src: url(font/DejaVuSansMono.ttf);
     }
 
     /* Bold */
     @font-face {
        font-family: DejaMono;
-       src: url('font/DejaVuSansMono-Bold.ttf');
+       src: url(font/DejaVuSansMono-Bold.ttf);
        font-weight: bold;
     }
 
     /* Italic */
     @font-face {
        font-family: DejaMono;
-       src: url('font/DejaVuSansMono-Oblique.ttf');
+       src: url(font/DejaVuSansMono-Oblique.ttf);
        font-style: italic;
     }
 
     /* Bold and italic */
     @font-face {
        font-family: DejaMono;
-       src: url('font/DejaVuSansMono-BoldOblique.ttf');
+       src: url(font/DejaVuSansMono-BoldOblique.ttf);
        font-weight: bold;
        font-style: italic;
     }
-
-
-Using TFF files with the same face-name
----------------------------------------
-
-In specific situations we have to use .ttf files with the same face name,
-but working with these kind of files makes us deal with some issues. To
-avoid it you have to add ``#`` at the beginning of the ``font-family name``.
-Please check the following example:
-
-::
-
-    /* put in quotes and add # at the beginning */
-    @font-face {
-        font-family: '#MY';
-        src: url('font/Microsoft YaHei.ttf')
-    }
-
 
 Outlines/ Bookmarks
 ------------------------
@@ -364,7 +271,7 @@ simple example for a nice looking CSS:
     pdftoc.pdftoclevel2 {
         margin-left: 2em;
         font-style: italic;
-    }
+    } 
 
 Tables
 --------
@@ -429,7 +336,7 @@ the PDF as in the browser. To adjust this you may want to use the
 
 ::
 
-    img { zoom: 80%; }
+    img { zoom: 80%; }  
 
 Position/ floating
 ------------------
@@ -444,9 +351,9 @@ Barcodes
 You can embed barcodes automatically in a document. Various barcode
 formats are supported through the ``type`` property. If you want the
 original barcode text to be appeared on the document, simply add
-``humanreadable="1"``, otherwise simply omit this property. Some barcode
+``humanreadable="1"``, otherwise simply omit this property. Some barcode 
 formats have a checksum as an option and it will be on by default, set
-``checksum="0"`` to override.
+``checksum="0"`` to override. 
 Alignment
 is achieved through ``align`` property and available values are any of
 ``"baseline", "top", "middle", "bottom"`` whereas default is
@@ -523,11 +430,4 @@ pdf:toc
 
 Creates a Table of Contents.
 
-pdf:language
-~~~~~~~~~~~~
 
-Used for languages with right-to-left writing like Arabic, Hebrew, Persion etc. Right-to-left writing can be defined by passing the name via the ``name=""`` property.
-
-::
-
-    <pdf:language name="arabic"/>

@@ -1,4 +1,15 @@
 # -*- coding: utf-8 -*-
+import io
+
+from xhtml2pdf.context import pisaContext
+from xhtml2pdf.default import DEFAULT_CSS
+from xhtml2pdf.parser import pisaParser
+from reportlab.platypus.flowables import Spacer
+from reportlab.platypus.frames import Frame
+from xhtml2pdf.xhtml2pdf_reportlab import PmlBaseDoc, PmlPageTemplate
+from xhtml2pdf.util import pisaTempFile, getBox, PyPDF2
+import cgi
+import logging
 
 # Copyright 2010 Dirk Holtwick, holtwick.it
 #
@@ -14,19 +25,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import io
-import logging
-from reportlab.platypus.flowables import Spacer
-from reportlab.platypus.frames import Frame
-
-from xhtml2pdf.context import pisaContext
-from xhtml2pdf.default import DEFAULT_CSS
-from xhtml2pdf.parser import pisaParser
-from xhtml2pdf.util import PyPDF3, getBox, pisaTempFile
-from xhtml2pdf.xhtml2pdf_reportlab import PmlBaseDoc, PmlPageTemplate
-
-from html import escape as html_escape
-
 log = logging.getLogger("xhtml2pdf")
 
 
@@ -35,14 +33,12 @@ def pisaErrorDocument(dest, c):
     out.write("<p style='background-color:red;'><strong>%d error(s) occured:</strong><p>" % c.err)
     for mode, line, msg, _ in c.log:
         if mode == "error":
-            out.write("<pre>%s in line %d: %s</pre>" %
-                      (mode, line, html_escape(msg)))
+            out.write("<pre>%s in line %d: %s</pre>" % (mode, line, cgi.escape(msg)))
 
     out.write("<p><strong>%d warning(s) occured:</strong><p>" % c.warn)
     for mode, line, msg, _ in c.log:
         if mode == "warning":
-            out.write("<p>%s in line %d: %s</p>" %
-                      (mode, line, html_escape(msg)))
+            out.write("<p>%s in line %d: %s</p>" % (mode, line, cgi.escape(msg)))
 
     return pisaDocument(out.getvalue(), dest, raise_exception=False)
 
@@ -140,15 +136,14 @@ def pisaDocument(src, dest=None, path=None, link_callback=None, debug=0,
         doc.build(context.story)
 
     # Add watermarks
-    if PyPDF3:
-        file_handler = None
+    if PyPDF2:
         for bgouter in context.pisaBackgroundList:
             # If we have at least one background, then lets do it
             if bgouter:
                 istream = out
 
-                output = PyPDF3.PdfFileWriter()
-                input1 = PyPDF3.PdfFileReader(istream)
+                output = PyPDF2.PdfFileWriter()
+                input1 = PyPDF2.PdfFileReader(istream)
                 ctr = 0
                 # TODO: Why do we loop over the same list again?
                 # see bgouter at line 137
@@ -158,39 +153,22 @@ def pisaDocument(src, dest=None, path=None, link_callback=None, debug=0,
                             bg and not bg.notFound() and
                             (bg.mimetype == "application/pdf")
                     ):
-                        file_handler = open(bg.uri, 'rb')
-                        bginput = PyPDF3.PdfFileReader(file_handler)
+                        bginput = PyPDF2.PdfFileReader(bg.getFile())
                         pagebg = bginput.getPage(0)
                         pagebg.mergePage(page)
                         page = pagebg
-
-                    # Todo: the else-statement doesn't make a lot of sense to me; it's just throwing warnings
-                    #  on unittesting \tests. Probably we have to rewrite the whole "background-image" stuff
-                    #  to deal with cases like:
-                    #  Page1 .jpg background
-                    #  Page1 .pdf background
-                    #  Page1 .jpg background, Page2 no background
-                    #  Page1 .pdf background, Page2 no background
-                    #  Page1 .jpg background, Page2 .pdf background
-                    #  Page1 .pdf background, Page2 .jpg background
-                    #  etc.
-                    #  Right now it's kind of confusing. (fbernhart)
-                    # else:
-                    #     log.warning(context.warning(
-                    #         "Background PDF %s doesn't exist.", bg))
-
+                    else:
+                        log.warn(context.warning(
+                            "Background PDF %s doesn't exist.", bg))
                     output.addPage(page)
-
                     ctr += 1
                 out = pisaTempFile(capacity=context.capacity)
                 output.write(out)
-                if file_handler:
-                    file_handler.close()
                 # data = sout.getvalue()
                 # Found a background? So leave loop after first occurence
                 break
     else:
-        log.warning(context.warning("PyPDF3 not installed!"))
+        log.warn(context.warning("PyPDF2 not installed!"))
 
     # Get the resulting PDF and write it to the file object
     # passed from the caller
@@ -201,6 +179,7 @@ def pisaDocument(src, dest=None, path=None, link_callback=None, debug=0,
     context.dest = dest
 
     data = out.getvalue()
+
     context.dest.write(data)  # TODO: context.dest is a tempfile as well...
 
     return context

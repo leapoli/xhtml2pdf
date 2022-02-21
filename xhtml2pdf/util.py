@@ -1,4 +1,36 @@
 # -*- coding: utf-8 -*-
+import base64
+from copy import copy
+import logging
+import mimetypes
+import os.path
+import re
+import shutil
+import string
+import sys
+import tempfile
+
+import reportlab
+from reportlab.lib.colors import Color, toColor
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.units import inch, cm
+import six
+
+
+try:
+    import httplib
+except ImportError:
+    import http.client as httplib
+
+try:
+    import urllib.request as urllib2
+except ImportError:
+    import urllib2
+
+try:
+    import urllib.parse as urlparse
+except ImportError:
+    import urlparse
 
 # Copyright 2010 Dirk Holtwick, holtwick.it
 #
@@ -14,36 +46,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import base64
-import io
-import logging
-import mimetypes
-import os.path
-import re
-import shutil
-import sys
-import tempfile
-from copy import copy
-from io import BytesIO
-
-import arabic_reshaper
-import reportlab
-import reportlab.pdfbase._cidfontdata
-from bidi.algorithm import get_display
-from reportlab.lib.colors import Color, toColor
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
-from reportlab.lib.units import cm, inch
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-
-import xhtml2pdf.default
-import http.client as httplib
-import urllib.request as urllib2
-import urllib.parse as urlparse
-from urllib.parse import unquote as urllib_unquote
-
 rgb_re = re.compile(
-    r"^.*?rgb[a]?[(]([0-9]+).*?([0-9]+).*?([0-9]+)(?:.*?(?:[01]\.(?:[0-9]+)))?[)].*?[ ]*$")
+    "^.*?rgb[a]?[(]([0-9]+).*?([0-9]+).*?([0-9]+)(?:.*?(?:[01]\.(?:[0-9]+)))?[)].*?[ ]*$")
 
 _reportlab_version = tuple(map(int, reportlab.Version.split('.')))
 if _reportlab_version < (2, 1):
@@ -52,9 +56,9 @@ if _reportlab_version < (2, 1):
 log = logging.getLogger("xhtml2pdf")
 
 try:
-    import PyPDF3
+    import PyPDF2
 except ImportError:
-    PyPDF3 = None
+    PyPDF2 = None
 
 try:
     from reportlab.graphics import renderPM
@@ -95,7 +99,7 @@ class memoized(object):
     def __call__(self, *args, **kwargs):
         # Make sure the following line is not actually slower than what you're
         # trying to memoize
-        args_plus = tuple(kwargs.items())
+        args_plus = tuple(six.iteritems(kwargs))
         key = (args, args_plus)
         try:
             if key not in self.cache:
@@ -133,7 +137,7 @@ def transform_attrs(obj, keys, container, func, extras=None):
     Allows to apply one function to set of keys cheching if key is in container,
     also trasform ccs key to report lab keys.
 
-    extras = Are extra params for func, it will be call like func(*[param1, param2])
+    extras = Are extra params for func, it will be call like func(*[param1, param2]) 
 
     obj = frag
     keys = [(reportlab, css), ... ]
@@ -158,7 +162,7 @@ def transform_attrs(obj, keys, container, func, extras=None):
 def copy_attrs(obj1, obj2, attrs):
     """
     Allows copy a list of attributes from object2 to object1.
-    Useful for copy ccs attributes to fragment
+    Useful for copy ccs attributes to fragment  
     """
     for attr in attrs:
         value = getattr(obj2, attr) if hasattr(obj2, attr) else None
@@ -169,7 +173,7 @@ def copy_attrs(obj1, obj2, attrs):
 
 def set_value(obj, attrs, value, _copy=False):
     """
-    Allows set the same value to a list of attributes
+    Allows set the same value to a list of attributes 
     """
     for attr in attrs:
         if _copy:
@@ -276,6 +280,8 @@ def getSize(value, relative=0, base=None, default=0.0):
             return float(value[:-2].strip()) * mm  # 1mm = 0.1cm
         elif value[-2:] == 'in':
             return float(value[:-2].strip()) * inch  # 1pt == 1/72inch
+        elif value[-2:] == 'inch':
+            return float(value[:-4].strip()) * inch  # 1pt == 1/72inch
         elif value[-2:] == 'pt':
             return float(value[:-2].strip())
         elif value[-2:] == 'pc':
@@ -284,13 +290,12 @@ def getSize(value, relative=0, base=None, default=0.0):
             # XXX W3C says, use 96pdi
             # http://www.w3.org/TR/CSS21/syndata.html#length-units
             return float(value[:-2].strip()) * dpi96
-        elif value in ("none", "0", '0.0', "auto"):
+        elif value[-1:] == 'i':  # 1pt == 1/72inch
+            return float(value[:-1].strip()) * inch
+        elif value in ("none", "0", "auto"):
             return 0.0
         elif relative:
-            if value[-3:] == 'rem':  # XXX
-                # 1rem = 1 * fontSize
-                return float(value[:-3].strip()) * relative
-            elif value[-2:] == 'em':  # XXX
+            if value[-2:] == 'em':  # XXX
                 # 1em = 1 * fontSize
                 return float(value[:-2].strip()) * relative
             elif value[-2:] == 'ex':  # XXX
@@ -314,11 +319,11 @@ def getSize(value, relative=0, base=None, default=0.0):
         try:
             value = float(value)
         except ValueError:
-            log.warning("getSize: Not a float %r", value)
+            log.warn("getSize: Not a float %r", value)
             return default  # value = 0
         return max(0, value)
     except Exception:
-        log.warning("getSize %r %r", original, relative, exc_info=1)
+        log.warn("getSize %r %r", original, relative, exc_info=1)
         return default
 
 
@@ -440,11 +445,11 @@ GAE = "google.appengine" in sys.modules
 
 if GAE:
     STRATEGIES = (
-        BytesIO,
-        BytesIO)
+        six.BytesIO,
+        six.BytesIO)
 else:
     STRATEGIES = (
-        BytesIO,
+        six.BytesIO,
         tempfile.NamedTemporaryFile)
 
 
@@ -496,7 +501,7 @@ class pisaTempFile(object):
                 new_delegate.write(self.getvalue())
                 self._delegate = new_delegate
                 self.strategy = 1
-                log.warning("Created temporary file %s", self.name)
+                log.warn("Created temporary file %s", self.name)
             except:
                 self.capacity = - 1
 
@@ -527,7 +532,7 @@ class pisaTempFile(object):
         self._delegate.flush()
         self._delegate.seek(0)
         value = self._delegate.read()
-        if not isinstance(value, bytes):
+        if not isinstance(value, six.binary_type):
             value = value.encode('utf-8')
         return value
 
@@ -547,7 +552,7 @@ class pisaTempFile(object):
             if needs_new_strategy:
                 self.makeTempFile()
 
-        if not isinstance(value, bytes):
+        if not isinstance(value, six.binary_type):
             value = value.encode('utf-8')
 
         self._delegate.write(value)
@@ -573,16 +578,15 @@ class pisaFileObject:
     """
 
     def __init__(self, uri, basepath=None):
-
         self.basepath = basepath
         self.mimetype = None
-        self.file_content = None
+        self.file = None
         self.data = None
         self.uri = None
         self.local = None
         self.tmp_file = None
         uri = uri or str()
-        if not isinstance(uri, str):
+        if type(uri) != str:
             uri = uri.decode("utf-8")
         log.debug("FileObject %r, Basepath: %r", uri, basepath)
 
@@ -590,21 +594,7 @@ class pisaFileObject:
         if uri.startswith("data:"):
             m = _rx_datauri.match(uri)
             self.mimetype = m.group("mime")
-
-            b64 = urllib_unquote(m.group("data"))
-
-            # The data may be incorrectly unescaped... repairs needed
-            b64 = b64.strip("b'").strip("'").encode()
-            b64 = re.sub(b"\\n", b'', b64)
-            b64 = re.sub(b'[^A-Za-z0-9\\+\\/]+', b'', b64)
-
-
-
-            # Add padding as needed, to make length into a multiple of 4
-            #
-            b64 += b"=" * ((4 - len(b64) % 4) % 4)
-
-            self.data = base64.b64decode(b64)
+            self.data = base64.b64decode(m.group("data").encode("utf-8"))
 
         else:
             # Check if we have an external scheme
@@ -622,7 +612,7 @@ class pisaFileObject:
                 self.mimetype = urlResponse.info().get(
                     "Content-Type", '').split(";")[0]
                 self.uri = urlResponse.geturl()
-                self.file_content = urlResponse.read()
+                self.file = urlResponse
 
             # Drive letters have len==1 but we are looking
             # for things like http:
@@ -640,10 +630,7 @@ class pisaFileObject:
                 #mimetype = getMimeType(path)
 
                 # Using HTTPLIB
-                url_splitted = urlparse.urlsplit(uri)
-                server = url_splitted[1]
-                path = url_splitted[2]
-                path += "?" + url_splitted[3] if url_splitted[3] else ""
+                server, path = urllib2.splithost(uri[uri.find("//"):])
                 if uri.startswith("https://"):
                     conn = httplib.HTTPSConnection(server,  **httpConfig)
                 else:
@@ -659,10 +646,10 @@ class pisaFileObject:
                     if r1.getheader("content-encoding") == "gzip":
                         import gzip
 
-                        self.file_content = gzip.GzipFile(
-                            mode="rb", fileobj=BytesIO(r1.read()))
+                        self.file = gzip.GzipFile(
+                            mode="rb", fileobj=six.StringIO(r1.read()))
                     else:
-                        self.file_content = pisaTempFile(r1.read())
+                        self.file = r1
                 else:
                     log.debug(
                         "Received non-200 status: {}".format((r1.status, r1.reason)))
@@ -674,8 +661,7 @@ class pisaFileObject:
                     self.mimetype = urlResponse.info().get(
                         "Content-Type", '').split(";")[0]
                     self.uri = urlResponse.geturl()
-                    self.file_content = urlResponse.read()
-                conn.close()
+                    self.file = urlResponse
 
             else:
 
@@ -683,8 +669,6 @@ class pisaFileObject:
 
                 # Local data
                 if basepath:
-                    if sys.platform == 'win32' and os.path.isfile(basepath):
-                        basepath = os.path.dirname(basepath)
                     uri = os.path.normpath(os.path.join(basepath, uri))
 
                 if os.path.isfile(uri):
@@ -693,19 +677,16 @@ class pisaFileObject:
 
                     self.setMimeTypeByName(uri)
                     if self.mimetype and self.mimetype.startswith('text'):
-                        with open(uri, "r") as file_handler:
-                            # removed bytes... lets hope it goes ok :/
-                            self.file_content = file_handler.read()
+                        self.file = open(uri, "r") #removed bytes... lets hope it goes ok :/
                     else:
-                        with open(uri, "rb") as file_handler:
-                            # removed bytes... lets hope it goes ok :/
-                            self.file_content = file_handler.read()
+                        # removed bytes... lets hope it goes ok :/
+                        self.file = open(uri, "rb")
 
-    def getFileContent(self):
-        if self.file_content is not None:
-            return self.file_content
+    def getFile(self):
+        if self.file is not None:
+            return self.file
         if self.data is not None:
-            return self.data
+            return pisaTempFile(self.data)
         return None
 
     def getNamedFile(self):
@@ -715,9 +696,8 @@ class pisaFileObject:
             return str(self.local)
         if not self.tmp_file:
             self.tmp_file = tempfile.NamedTemporaryFile()
-            if self.file_content:
-                with io.StringIO(self.file_content) as file_handler:
-                    shutil.copyfileobj(file_handler, self.tmp_file)
+            if self.file:
+                shutil.copyfileobj(self.file, self.tmp_file)
             else:
                 self.tmp_file.write(self.getData())
             self.tmp_file.flush()
@@ -726,20 +706,20 @@ class pisaFileObject:
     def getData(self):
         if self.data is not None:
             return self.data
-        if self.file_content is not None:
-            # try:
-            #     self.data = self.file_content
-            # except:
-            #     if self.mimetype and self.mimetype.startswith('text'):
-            #         self.file = open(self.file.name, "rb") #removed bytes... lets hope it goes ok :/
-            #         self.data = self.file.read().decode('utf-8')
-            #     else:
-            #         raise
-            return self.file_content
+        if self.file is not None:
+            try:
+                self.data = self.file.read()
+            except:
+                if self.mimetype and self.mimetype.startswith('text'):
+                    self.file = open(self.file.name, "rb") #removed bytes... lets hope it goes ok :/
+                    self.data = self.file.read().decode('utf-8')
+                else:
+                    raise
+            return self.data
         return None
 
     def notFound(self):
-        return (self.file_content is None) and (self.data is None)
+        return (self.file is None) and (self.data is None)
 
     def setMimeTypeByName(self, name):
         " Guess the mime type "
@@ -932,50 +912,3 @@ COLOR_BY_NAME = {
     'yellow': Color(1, 1, 0),
     'yellowgreen': Color(.603922, .803922, .196078)
 }
-
-
-def get_default_asian_font():
-    lower_font_list = []
-    upper_font_list = []
-
-    font_dict = copy(reportlab.pdfbase._cidfontdata.defaultUnicodeEncodings)
-    fonts = font_dict.keys()
-
-    for font in fonts:
-        upper_font_list.append(font)
-        lower_font_list.append(font.lower())
-    default_asian_font = {lower_font_list[i]: upper_font_list[i] for i in range(len(lower_font_list))}
-
-    return default_asian_font
-
-
-def set_asian_fonts(fontname):
-    font_dict = copy(reportlab.pdfbase._cidfontdata.defaultUnicodeEncodings)
-    fonts = font_dict.keys()
-    if fontname in fonts:
-        pdfmetrics.registerFont(UnicodeCIDFont(fontname))
-
-
-def detect_language(name):
-    asian_language_list = xhtml2pdf.default.DEFAULT_LANGUAGE_LIST
-    if name in asian_language_list:
-        return name
-
-
-def arabic_format(text, language):
-    # Note: right now all of the languages are treated the same way.
-    # But maybe in the future we have to for example implement something
-    # for "hebrew" that isn't used in "arabic"
-    if detect_language(language) in ('arabic', 'hebrew', 'persian', 'urdu', 'pashto', 'sindhi'):
-        ar = arabic_reshaper.reshape(text)
-        return get_display(ar)
-    else:
-        return None
-
-
-def frag_text_language_check(context, frag_text):
-    if hasattr(context, 'language'):
-        language = context.__getattribute__('language')
-        detect_language_result = arabic_format(frag_text, language)
-        if detect_language_result:
-            return detect_language_result

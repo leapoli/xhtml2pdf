@@ -9,29 +9,29 @@ Using with Python standalone
     from xhtml2pdf import pisa             # import python module
     
     # Define your data
-    source_html = "<html><body><p>To PDF or not to PDF</p></body></html>"
-    output_filename = "test.pdf"
+    sourceHtml = "<html><body><p>To PDF or not to PDF</p></body></html>"
+    outputFilename = "test.pdf"
 
     # Utility function
-    def convert_html_to_pdf(source_html, output_filename):
+    def convertHtmlToPdf(sourceHtml, outputFilename):
         # open output file for writing (truncated binary)
-        result_file = open(output_filename, "w+b")
+        resultFile = open(outputFilename, "w+b")
     
         # convert HTML to PDF
-        pisa_status = pisa.CreatePDF(
-                source_html,                # the HTML to convert
-                dest=result_file)           # file handle to recieve result
+        pisaStatus = pisa.CreatePDF(
+                sourceHtml,                # the HTML to convert
+                dest=resultFile)           # file handle to recieve result
     
         # close output file
-        result_file.close()                 # close output file
+        resultFile.close()                 # close output file
 
-        # return False on success and True on errors
-        return pisa_status.err
+        # return True on success and False on errors
+        return pisaStatus.err
 
     # Main program
     if __name__ == "__main__":
         pisa.showLogging()
-        convert_html_to_pdf(source_html, output_filename)
+        convertHtmlToPdf(sourceHtml, outputFilename)
 
 This basic Python example will generate a test.pdf file with the text
 'To PDF or not to PDF' in the top left of the page.
@@ -43,7 +43,7 @@ Using xhtml2pdf in Django
 ----------------------------
 
 To allow URL references to be resolved using Django's STATIC_URL and MEDIA_URL settings,
-xhtml2pdf allows users to specify a ``link_callback`` parameter to point to a function
+xhtml2pdf allows users to specify a ``link_callback`` paramter to point to a function
 that converts relative URLs to absolute system paths.
 
 .. code:: python
@@ -51,43 +51,35 @@ that converts relative URLs to absolute system paths.
     import os
     from django.conf import settings
     from django.http import HttpResponse
+    from django.template import Context
     from django.template.loader import get_template
     from xhtml2pdf import pisa
-    from django.contrib.staticfiles import finders
     
+    def link_callback(uri, rel):
+        """
+        Convert HTML URIs to absolute system paths so xhtml2pdf can access those
+        resources
+        """
+        # use short variable names
+        sUrl = settings.STATIC_URL      # Typically /static/
+        sRoot = settings.STATIC_ROOT    # Typically /home/userX/project_static/
+        mUrl = settings.MEDIA_URL       # Typically /static/media/
+        mRoot = settings.MEDIA_ROOT     # Typically /home/userX/project_static/media/
     
-	def link_callback(uri, rel):
-		"""
-		Convert HTML URIs to absolute system paths so xhtml2pdf can access those
-		resources
-		"""
-		result = finders.find(uri)
-		if result:
-			if not isinstance(result, (list, tuple)):
-				result = [result]
-			result = list(os.path.realpath(path) for path in result)
-			path=result[0]
-		else:
-			sUrl = settings.STATIC_URL        # Typically /static/
-			sRoot = settings.STATIC_ROOT      # Typically /home/userX/project_static/
-			mUrl = settings.MEDIA_URL         # Typically /media/
-			mRoot = settings.MEDIA_ROOT       # Typically /home/userX/project_static/media/
-
-			if uri.startswith(mUrl):
-				path = os.path.join(mRoot, uri.replace(mUrl, ""))
-			elif uri.startswith(sUrl):
-				path = os.path.join(sRoot, uri.replace(sUrl, ""))
-			else:
-				return uri
-
-		# make sure that file exists
-		if not os.path.isfile(path):
-			raise Exception(
-				'media URI must start with %s or %s' % (sUrl, mUrl)
-			)
-		return path 
-        
- 
+        # convert URIs to absolute system paths
+        if uri.startswith(mUrl):
+            path = os.path.join(mRoot, uri.replace(mUrl, ""))
+        elif uri.startswith(sUrl):
+            path = os.path.join(sRoot, uri.replace(sUrl, ""))
+        else:
+            return uri  # handle absolute uri (ie: http://some.tld/foo.png)
+    
+        # make sure that file exists
+        if not os.path.isfile(path):
+                raise Exception(
+                    'media URI must start with %s or %s' % (sUrl, mUrl)
+                )
+        return path
 
 .. code:: python
 
@@ -99,13 +91,13 @@ that converts relative URLs to absolute system paths.
         response['Content-Disposition'] = 'attachment; filename="report.pdf"'
         # find the template and render it.
         template = get_template(template_path)
-        html = template.render(context)
+        html = template.render(Context(context))
 
         # create a pdf
-        pisa_status = pisa.CreatePDF(
+        pisaStatus = pisa.CreatePDF(
            html, dest=response, link_callback=link_callback)
         # if error then show some funy view
-        if pisa_status.err:
+        if pisaStatus.err:
            return HttpResponse('We had some errors <pre>' + html + '</pre>')
         return response
 

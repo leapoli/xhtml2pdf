@@ -1,33 +1,38 @@
 #!/usr/bin/env python
 from __future__ import print_function
-
 import datetime
-import glob
 import os
 import shutil
 import sys
+import glob
+import decimal
 from optparse import OptionParser
-from subprocess import PIPE, Popen
+from subprocess import Popen, PIPE
 
-sys.path.append("..")
 from xhtml2pdf import pisa
-
-do_bytes = ''
+do_bytes = 'b'
+if sys.version[0] != '2':
+    do_bytes = ''
 
 def render_pdf(filename, output_dir, options):
     if options.debug:
         print('Rendering %s' % filename)
     basename = os.path.basename(filename)
     outname = '%s.pdf' % os.path.splitext(basename)[0]
-    output_path = os.path.join(output_dir, outname)
+    outfile = os.path.join(output_dir, outname)
 
-    with open(filename, 'rb') as input_file, open(output_path, 'wb') as output_file:
-        result = pisa.pisaDocument(input_file, output_file, path=filename)
+    input = open(filename, 'rb')
+    output = open(outfile, 'wb')
+
+    result = pisa.pisaDocument(input, output, path=filename)
+
+    input.close()
+    output.close()
 
     if result.err:
         print('Error rendering %s: %s' % (filename, result.err))
         sys.exit(1)
-    return output_path
+    return outfile
 
 
 def convert_to_png(infile, output_dir, options):
@@ -56,8 +61,7 @@ def create_diff_image(srcfile1, srcfile2, output_dir, options):
 
     outname = '%s.diff%s' % os.path.splitext(srcfile1)
     outfile = os.path.join(output_dir, outname)
-    # -quiet avoids a colorspace warning
-    _,result = exec_cmd(options, options.compare_cmd, srcfile1, srcfile2, '-quiet', '-metric', 'ae', '-lowlight-color','white', '-colorspace', 'RGB', outfile)
+    _, result = exec_cmd(options, options.compare_cmd, '-metric', 'ae', srcfile1, srcfile2, '-lowlight-color', 'white', outfile)
     diff_value = int(float(result.strip()))
     if diff_value > 0:
         if not options.quiet:
@@ -137,17 +141,17 @@ def create_html_file(results, template_file, output_dir, options):
                     '<h2>Generated from <a href="../%(src)s/%(html)s" class="">%(html)s</a></h2>\n'
                     % {'pdf': pdfname, 'html':htmlname, 'src': options.source_dir})
         for i, page in enumerate(pages):
-            variables = dict(((k, os.path.basename(v)) for k, v in page.items()
-                              if k != 'diff_value'))
-            variables['page'] = i + 1
+            vars = dict(((k, os.path.basename(v)) for k,v in page.items()
+                         if k != 'diff_value'))
+            vars['page'] = i+1
             if 'diff' in page:
-                variables['diff_value'] = page['diff_value']
-                if variables['diff_value']:
-                    variables['class'] = 'result-page-diff error'
+                vars['diff_value'] = page['diff_value']
+                if vars['diff_value']:
+                    vars['class'] = 'result-page-diff error'
                 else:
                     if options.only_errors:
                         continue
-                    variables['class'] = 'result-page-diff'
+                    vars['class'] = 'result-page-diff'
                 html.append('<div class="%(class)s">\n'
                             '<h3>Page %(page)i</h3>\n'
 
@@ -170,7 +174,7 @@ def create_html_file(results, template_file, output_dir, options):
                             '<img src="%(ref_thumb)s"/></a>\n'
                             '</div>\n'
 
-                            '</div>\n' % variables)
+                            '</div>\n' % vars)
             else:
                 html.append('<div class="result-page">\n'
                            '<h3>Page %(page)i</h3>\n'
@@ -180,7 +184,7 @@ def create_html_file(results, template_file, output_dir, options):
                            '<img src="%(png_thumb)s"/></a>\n'
                            '</div>\n'
 
-                           '</div>\n' % variables)
+                           '</div>\n' % vars)
         html.append('</div>\n\n')
 
     now = datetime.datetime.now()
@@ -269,7 +273,7 @@ parser.add_option('-F', '--nofail', dest='nofail', action='store_true',
                   )
 parser.add_option('-X', '--remove_transparencies', dest='remove_transparencies', action='store_false',
                   default=True, help="Don't try to remove transparent backgrounds "
-                  "Needed for CI"
+                  "Needed for Travis-CI"
                   )
 
 parser.add_option('--no-compare', dest='no_compare', action='store_true',

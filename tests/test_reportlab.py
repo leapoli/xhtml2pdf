@@ -1,9 +1,8 @@
-from unittest import TestCase
-
+import unittest
 from xhtml2pdf import xhtml2pdf_reportlab
 
 
-class PTCycleTest(TestCase):
+class PTCycleTest(unittest.TestCase):
     def test_init(self):
         xhtml2pdf_reportlab.PTCycle()
 
@@ -14,7 +13,7 @@ class PTCycleTest(TestCase):
             pass
 
 
-class PmlMaxHeightMixInTest(TestCase):
+class PmlMaxHeightMixInTest(unittest.TestCase):
     def test_setMaxHeight_height_lt_70000(self):
         pmlmaxheightmixin = xhtml2pdf_reportlab.PmlMaxHeightMixIn()
         pmlmaxheightmixin.setMaxHeight(69999)
@@ -36,3 +35,7 @@ class PmlMaxHeightMixInTest(TestCase):
         self.assertEqual(0, pmlmaxheightmixin.getMaxHeight())
         pmlmaxheightmixin.availHeightValue = 42
         self.assertEqual(42, pmlmaxheightmixin.getMaxHeight())
+
+
+if __name__ == "__main__":
+    unittest.main()

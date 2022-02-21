@@ -1,4 +1,35 @@
 # -*- coding: utf-8 -*-
+import copy
+import logging
+import os
+import re
+
+import reportlab
+from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.fonts import addMapping
+from reportlab.lib.pagesizes import landscape, A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus.frames import Frame, ShowBoundaryValue
+from reportlab.platypus.paraparser import ParaFrag, ps2tt, tt2ps
+import six
+
+import xhtml2pdf.default
+import xhtml2pdf.parser
+from xhtml2pdf.util import getSize, getCoords, getFile, pisaFileObject, \
+    getFrameDimensions, getColor, set_value, copy_attrs
+from xhtml2pdf.w3c import css
+from xhtml2pdf.xhtml2pdf_reportlab import PmlPageTemplate, PmlTableOfContents, \
+    PmlParagraph, PmlParagraphAndImage, PmlPageCount
+
+
+TupleType = tuple
+ListType = list
+try:
+    import urlparse
+except ImportError:
+    import urllib.parse as urlparse
 
 # Copyright 2010 Dirk Holtwick, holtwick.it
 #
@@ -14,35 +45,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-import logging
-import os
-import re
+reportlab.rl_config.warnOnMissingFontGlyphs = 0
 
-from reportlab import rl_settings
-from reportlab.lib.enums import TA_LEFT
-from reportlab.lib.fonts import addMapping
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus.frames import Frame, ShowBoundaryValue
-from reportlab.platypus.paraparser import ParaFrag, ps2tt, tt2ps
-
-import xhtml2pdf.default
-import xhtml2pdf.parser
-from xhtml2pdf.util import (arabic_format, copy_attrs, frag_text_language_check, getColor, getCoords, getFile,
-                            getFrameDimensions, getSize, pisaFileObject, set_asian_fonts, set_value)
-from xhtml2pdf.w3c import css
-from xhtml2pdf.xhtml2pdf_reportlab import (PmlPageCount, PmlPageTemplate, PmlParagraph,
-                                           PmlParagraphAndImage, PmlTableOfContents)
-import urllib.parse as urlparse
-TupleType = tuple
-ListType = list
-
-
-
-rl_settings.warnOnMissingFontGlyphs = 0
 log = logging.getLogger("xhtml2pdf")
 
 sizeDelta = 2       # amount to reduce font size by for super and sub script
@@ -149,7 +153,7 @@ class pisaCSSBuilder(css.CSSBuilder):
         fweight = str(data.get("font-weight", "normal")).lower()
         bold = fweight in ("bold", "bolder", "500", "600", "700", "800", "900")
         if not bold and fweight != "normal":
-            log.warning(
+            log.warn(
                 self.c.warning("@fontface, unknown value font-weight '%s'", fweight))
 
         # Font style
@@ -159,22 +163,18 @@ class pisaCSSBuilder(css.CSSBuilder):
         # The "src" attribute can be a CSS group but in that case
         # ignore everything except the font URI
         uri = data['src']
-        fonts = []
-
-        if isinstance(data['src'], list):
+        if not isinstance(data['src'], str):
             for part in uri:
                 if isinstance(part, str):
-                    fonts.append(part)
-        else:
-            fonts.append(uri)
+                    uri = part
+                    break
 
-        for font in fonts:
-            src = self.c.getFile(font, relative=self.c.cssParser.rootPath)
-            self.c.loadFont(
-                names,
-                src,
-                bold=bold,
-                italic=italic)
+        src = self.c.getFile(uri, relative=self.c.cssParser.rootPath)
+        self.c.loadFont(
+            names,
+            src,
+            bold=bold,
+            italic=italic)
         return {}, {}
 
     def _pisaAddFrame(self, name, data, first=False, border=None, size=(0, 0)):
@@ -195,7 +195,7 @@ class pisaCSSBuilder(css.CSSBuilder):
 
     def _getFromData(self, data, attr, default=None, func=None):
         if not func:
-            def func(x): return x
+            func = lambda x: x
 
         if type(attr) in (list, tuple):
             for a in attr:
@@ -207,13 +207,53 @@ class pisaCSSBuilder(css.CSSBuilder):
                 return func(data[attr])
             return default
 
-    def atPage(self, name, pseudopage, data, isLandscape, pageBorder):
+    def atPage(self, name, pseudopage, declarations):
         c = self.c
+        data = {}
         name = name or "body"
+        pageBorder = None
+
+        if declarations:
+            result = self.ruleset([self.selector('*')], declarations)
+
+            if declarations:
+                try:
+                    data = result[0].values()[0]
+                except Exception:
+                    data = result[0].popitem()[1]
+                pageBorder = data.get("-pdf-frame-border", None)
 
         if name in c.templateList:
-            log.warning(
+            log.warn(
                 self.c.warning("template '%s' has already been defined", name))
+
+        if "-pdf-page-size" in data:
+            c.pageSize = xhtml2pdf.default.PML_PAGESIZES.get(
+                str(data["-pdf-page-size"]).lower(), c.pageSize)
+
+        isLandscape = False
+        if "size" in data:
+            size = data["size"]
+            if type(size) is not ListType:
+                size = [size]
+            sizeList = []
+            for value in size:
+                valueStr = str(value).lower()
+                if type(value) is TupleType:
+                    sizeList.append(getSize(value))
+                elif valueStr == "landscape":
+                    isLandscape = True
+                elif valueStr == "portrait":
+                    isLandscape = False
+                elif valueStr in xhtml2pdf.default.PML_PAGESIZES:
+                    c.pageSize = xhtml2pdf.default.PML_PAGESIZES[valueStr]
+                else:
+                    raise RuntimeError("Unknown size value for @page")
+
+            if len(sizeList) == 2:
+                c.pageSize = tuple(sizeList)
+            if isLandscape:
+                c.pageSize = landscape(c.pageSize)
 
         padding_top = self._getFromData(data, 'padding-top', 0, getSize)
         padding_left = self._getFromData(data, 'padding-left', 0, getSize)
@@ -249,9 +289,7 @@ class pisaCSSBuilder(css.CSSBuilder):
                                                       'border-left-width', 'border-right-width'), border_width, getSize)
 
             if border or pageBorder:
-
-                frame_border = ShowBoundaryValue(width=int(border))   #frame_border = ShowBoundaryValue() to
-                                                                      #frame_border = ShowBoundaryValue(width=int(border))
+                frame_border = ShowBoundaryValue()
             else:
                 frame_border = ShowBoundaryValue(
                     color=fborder_color, width=fborder_width)
@@ -262,7 +300,7 @@ class pisaCSSBuilder(css.CSSBuilder):
                     fdata, c.pageSize[0], c.pageSize[1])
             x, y, w, h = getCoords(x, y, w, h, c.pageSize)
             if w <= 0 or h <= 0:
-                log.warning(
+                log.warn(
                     self.c.warning("Negative width or height of frame. Check @frame definitions."))
 
             frame = Frame(
@@ -288,13 +326,13 @@ class pisaCSSBuilder(css.CSSBuilder):
                 background, relative=self.c.cssParser.rootPath)
 
         if not frameList:
-            log.warning(
+            log.warn(
                 c.warning("missing explicit frame definition for content or just static frames"))
             fname, static, border, x, y, w, h, data = self._pisaAddFrame(name, data, first=True, border=pageBorder,
                                                                          size=c.pageSize)
             x, y, w, h = getCoords(x, y, w, h, c.pageSize)
             if w <= 0 or h <= 0:
-                log.warning(
+                log.warn(
                     c.warning("Negative width or height of frame. Check @page definitions."))
 
             if border or pageBorder:
@@ -351,7 +389,7 @@ class pisaCSSBuilder(css.CSSBuilder):
 class pisaCSSParser(css.CSSParser):
 
     def parseExternal(self, cssResourceName):
-        result = None
+        result=None
         oldRootPath = self.rootPath
         cssFile = self.c.getFile(cssResourceName, relative=self.rootPath)
         if not cssFile:
@@ -376,7 +414,6 @@ class pisaContext(object):
 
     def __init__(self, path, debug=0, capacity=-1):
         self.fontList = copy.copy(xhtml2pdf.default.DEFAULT_FONT)
-        self.asianFontList = copy.copy(xhtml2pdf.default.DEFAULT_ASIAN_FONT)
         set_value(self,
                   ('path', 'story', 'text', 'log', 'frameStaticList',
                    'pisaBackgroundList', 'frameList', 'anchorFrag',
@@ -391,6 +428,7 @@ class pisaContext(object):
         set_value(self, ('text', 'cssText', 'cssDefaultText'), "")
         set_value(self, ('templateList', 'frameStatic', 'imageData'),
                   {}, _copy=True)
+
         self.capacity = capacity
         self.toc = PmlTableOfContents()
         self.multiBuild = False
@@ -520,7 +558,7 @@ class pisaContext(object):
 
     def addTOC(self):
         styles = []
-        for i in range(20):
+        for i in six.moves.range(20):
             self.node.attributes["class"] = "pdftoclevel%d" % i
             self.cssAttr = xhtml2pdf.parser.CSSCollect(self.node, self)
             xhtml2pdf.parser.CSS2Frag(self, {
@@ -591,11 +629,6 @@ class pisaContext(object):
                     self.fragList.append(blank)
 
                 self.dumpPara(self.fragAnchor + self.fragList, style)
-                if hasattr(self, 'language'):
-                    language = self.__getattribute__('language')
-                    detect_language_result = arabic_format(self.text, language)
-                    if detect_language_result != None:
-                        self.text = detect_language_result
                 para = PmlParagraph(
                     self.text,
                     style,
@@ -706,9 +739,6 @@ class pisaContext(object):
                     self._appendFrag(frag)
                 else:
                     frag.text = " ".join(("x" + text + "x").split())[1: - 1]
-                    language_check = frag_text_language_check(self, frag.text)
-                    if language_check:
-                        frag.text = language_check
                     if self.fragStrip:
                         frag.text = frag.text.lstrip()
                         if frag.text:
@@ -766,17 +796,17 @@ class pisaContext(object):
                 nv = self.pathCallback(name, relative)
             else:
                 if path is None:
-                    log.warning(
+                    log.warn(
                         "Could not find main directory for getting filename. Use CWD")
                     path = os.getcwd()
                 nv = os.path.normpath(os.path.join(path, name))
                 if not (nv and os.path.isfile(nv)):
                     nv = None
             if nv is None:
-                log.warning(self.warning("File '%s' does not exist", name))
+                log.warn(self.warning("File '%s' does not exist", name))
             return nv
         except:
-            log.warning(
+            log.warn(
                 self.warning("getFile %r %r %r", name, relative, path), exc_info=1)
 
     def getFile(self, name, relative=None):
@@ -793,16 +823,13 @@ class pisaContext(object):
         """
         # print names, self.fontList
         if type(names) is not ListType:
-            names = str(names)
+            if type(names) not in six.string_types:
+                names = str(names)
             names = names.strip().split(",")
         for name in names:
-            name = str(name)
-            font = name.strip().lower()
-            if font in self.asianFontList:
-                font = self.asianFontList.get(font, None)
-                set_asian_fonts(font)
-            else:
-                font = self.fontList.get(font,None)
+            if type(name) not in six.string_types:
+                name = str(name)
+            font = self.fontList.get(name.strip().lower(), None)
             if font is not None:
                 return font
         return self.fontList.get(default, None)
@@ -811,7 +838,9 @@ class pisaContext(object):
         alias = alias if alias is not None else []
         self.fontList[str(fontname).lower()] = str(fontname)
         for a in alias:
-            self.fontList[str(a)] = str(fontname)
+            if type(fontname) not in six.string_types:
+                fontname = str(fontname)
+            self.fontList[str(a)] = fontname
 
     def loadFont(self, names, src, encoding="WinAnsiEncoding", bold=0, italic=0):
 
@@ -822,8 +851,7 @@ class pisaContext(object):
             src = file.uri
 
             log.debug("Load font %r", src)
-            if isinstance(names, str) and names.startswith("#"):
-                names = names.strip('#')
+
             if type(names) is ListType:
                 fontAlias = names
             else:
@@ -832,7 +860,6 @@ class pisaContext(object):
             # XXX Problems with unicode here
             fontAlias = [str(x) for x in fontAlias]
 
-            ffname = names
             fontName = fontAlias[0]
             parts = src.split(".")
             baseName, suffix = ".".join(parts[: - 1]), parts[- 1]
@@ -845,14 +872,13 @@ class pisaContext(object):
 
                 # check if font has already been registered
                 if fullFontName in self.fontList:
-                    log.warning(
+                    log.warn(
                         self.warning("Repeated font embed for %s, skip new embed ", fullFontName))
                 else:
 
                     # Register TTF font and special name
                     filename = file.getNamedFile()
-                    file = TTFont(fullFontName, filename)
-                    pdfmetrics.registerFont(file)
+                    pdfmetrics.registerFont(TTFont(fullFontName, filename))
 
                     # Add or replace missing styles
                     for bold in (0, 1):
@@ -880,7 +906,7 @@ class pisaContext(object):
 
                 # check if font has already been registered
                 if fullFontName in self.fontList:
-                    log.warning(
+                    log.warn(
                         self.warning("Repeated font embed for %s, skip new embed", fontName))
                 else:
 
