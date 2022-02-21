@@ -17,7 +17,7 @@
 from hashlib import md5
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.utils import flatten, open_for_read, getStringIO, \
+from reportlab.lib.utils import flatten, open_for_read, \
     LazyImageReader, haveImages
 from reportlab.platypus.doctemplate import BaseDocTemplate, PageTemplate, IndexingFlowable
 from reportlab.platypus.flowables import Flowable, CondPageBreak, \
@@ -26,6 +26,8 @@ from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.platypus.tables import Table, TableStyle
 from xhtml2pdf.reportlab_paragraph import Paragraph
 from xhtml2pdf.util import getUID, getBorderStyle
+
+ from io import BytesIO, StringIO
 
 import six
 import sys
@@ -336,7 +338,7 @@ class PmlImageReader(object):  # TODO We need a factory here, returning either a
                             register_reset(self._cache.clear)
 
                         data = self._cache.setdefault(md5(data).digest(), data)
-                    self.fp = getStringIO(data)
+                    self.fp = StringIO(data)
                 elif imageReaderFlags == - 1 and isinstance(fileName, six.text_type):
                     #try Ralf Schmitt's re-opening technique of avoiding too many open files
                     self.fp.close()
