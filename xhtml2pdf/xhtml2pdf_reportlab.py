@@ -17,11 +17,9 @@
 from hashlib import md5
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.utils import flatten, open_for_read, \
-    LazyImageReader, haveImages
+from reportlab.lib.utils import flatten, open_for_read, LazyImageReader, haveImages
 from reportlab.platypus.doctemplate import BaseDocTemplate, PageTemplate, IndexingFlowable
-from reportlab.platypus.flowables import Flowable, CondPageBreak, \
-    KeepInFrame, ParagraphAndImage
+from reportlab.platypus.flowables import Flowable, CondPageBreak, KeepInFrame, ParagraphAndImage
 from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.platypus.tables import Table, TableStyle
 from xhtml2pdf.reportlab_paragraph import Paragraph
